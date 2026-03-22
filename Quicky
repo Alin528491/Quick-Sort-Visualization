@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QuickSort</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --void: #030309;
+  --surface: rgba(255,255,255,0.03);
+  --border: rgba(255,255,255,0.07);
+  --text: #b8b8d8;
+  --text-bright: #e8e8ff;
+  --col-pivot: #ffb700;
+  --col-compare: #00e5ff;
+  --col-sorted: #00e676;
+  --col-swap: #ff2055;
+  --col-range: #252275;
+  --col-default: #1a1748;
+  --accent: #7b2fff;
+  --font-d: 'Orbitron', sans-serif;
+  --font-m: 'Share Tech Mono', monospace;
+}
+
+html, body {
+  width: 100%; height: 100vh;
+  background: var(--void);
+  color: var(--text);
+  font-family: var(--font-m);
+  overflow: hidden;
+  user-select: none;
+}
+
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background:
+    radial-gradient(ellipse 70% 50% at 15% 25%, rgba(123,47,255,0.09) 0%, transparent 55%),
+    radial-gradient(ellipse 60% 45% at 85% 75%, rgba(0,80,255,0.07) 0%, transparent 55%),
+    radial-gradient(ellipse 90% 60% at 50% 50%, rgba(0,0,40,0.6) 0%, transparent 100%);
+  pointer-events: none;
+  animation: nebula 18s ease-in-out infinite alternate;
+  z-index: 0;
+}
+
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px);
+  background-size: 44px 44px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+@keyframes nebula {
+  0%   { opacity: 0.7; transform: scale(1) rotate(0deg); }
+  50%  { opacity: 1; }
+  100% { opacity: 0.75; transform: scale(1.06) rotate(0.5deg); }
+}
+
+#app {
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column;
+  height: 100vh; padding: 14px 18px; gap: 10px;
+  max-width: 1600px; margin: 0 auto;
+}
+
+#stats {
+  display: flex; gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 16px;
+  backdrop-filter: blur(12px);
+  flex-shrink: 0;
+}
+
+.stat {
+  display: flex; flex-direction: column; gap: 3px;
+  flex: 1; text-align: center;
+  padding: 0 8px;
+  border-right: 1px solid var(--border);
+}
+.stat:last-child { border-right: none; }
+
+.stat-label {
+  font-size: 0.52rem; letter-spacing: 0.22em;
+  color: rgba(255,255,255,0.3); text-transform: uppercase;
+}
+.stat-value {
+  font-family: var(--font-m);
+  font-size: clamp(1rem, 1.8vw, 1.3rem);
+  font-weight: bold; color: var(--text-bright);
+  transition: color 0.15s;
+}
+
+.stat.s-comp  .stat-value { color: var(--col-compare); text-shadow: 0 0 12px rgba(0,229,255,0.5); }
+.stat.s-swap  .stat-value { color: var(--col-swap);    text-shadow: 0 0 12px rgba(255,32,85,0.5); }
+.stat.s-depth .stat-value { color: var(--col-pivot);   text-shadow: 0 0 12px rgba(255,183,0,0.5); }
+.stat.s-step  .stat-value { color: var(--col-sorted);  text-shadow: 0 0 12px rgba(0,230,118,0.5); }
+
+#viz-wrap {
+  flex: 1;
+  position: relative;
+  background: rgba(0,0,10,0.5);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  min-height: 0;
+}
+
+#viz-wrap::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent, transparent 3px,
+    rgba(0,0,0,0.04) 3px, rgba(0,0,0,0.04) 4px
+  );
+  pointer-events: none; z-index: 2;
+}
+
+#viz-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+#viz-wrap::before {
+  content: '';
+  position: absolute; inset: 0;
+  box-shadow: inset 0 0 40px rgba(0,0,20,0.6);
+  pointer-events: none; z-index: 1;
+}
+
+.corner {
+  position: absolute; width: 14px; height: 14px;
+  z-index: 3; pointer-events: none;
+}
+.corner-tl { top: 6px; left: 6px;
+  border-top: 1px solid rgba(123,47,255,0.6); border-left: 1px solid rgba(123,47,255,0.6); }
+.corner-tr { top: 6px; right: 6px;
+  border-top: 1px solid rgba(123,47,255,0.6); border-right: 1px solid rgba(123,47,255,0.6); }
+.corner-bl { bottom: 6px; left: 6px;
+  border-bottom: 1px solid rgba(123,47,255,0.6); border-left: 1px solid rgba(123,47,255,0.6); }
+.corner-br { bottom: 6px; right: 6px;
+  border-bottom: 1px solid rgba(123,47,255,0.6); border-right: 1px solid rgba(123,47,255,0.6); }
+
+#status {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 16px;
+  backdrop-filter: blur(12px);
+  display: flex; align-items: center; gap: 10px;
+  flex-shrink: 0; min-height: 38px;
+}
+
+.status-icon {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--col-compare);
+  box-shadow: 0 0 8px var(--col-compare);
+  flex-shrink: 0;
+  animation: pulse 2s ease-in-out infinite;
+}
+.status-icon.idle   { background: rgba(255,255,255,0.2); box-shadow: none; animation: none; }
+.status-icon.done   { background: var(--col-sorted); box-shadow: 0 0 8px var(--col-sorted); }
+.status-icon.paused { background: var(--col-pivot); box-shadow: 0 0 8px var(--col-pivot); animation: none; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+#status-text {
+  font-size: 0.75rem; letter-spacing: 0.04em;
+  color: var(--text); flex: 1;
+}
+
+#controls {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 18px;
+  backdrop-filter: blur(20px);
+  display: flex; flex-wrap: wrap;
+  gap: 14px; align-items: center;
+  flex-shrink: 0;
+}
+
+.ctrl-group {
+  display: flex; flex-direction: column; gap: 6px;
+  flex: 1; min-width: 100px;
+}
+.ctrl-label {
+  font-size: 0.52rem; letter-spacing: 0.22em;
+  color: rgba(255,255,255,0.28); text-transform: uppercase;
+  display: flex; justify-content: space-between;
+}
+.ctrl-label span { color: var(--text-bright); }
+
+input[type="range"] {
+  -webkit-appearance: none; width: 100%;
+  height: 3px; background: rgba(255,255,255,0.08);
+  border-radius: 2px; outline: none; cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 13px; height: 13px; border-radius: 50%;
+  background: var(--col-compare);
+  cursor: pointer;
+  box-shadow: 0 0 8px rgba(0,229,255,0.7);
+  transition: box-shadow 0.2s;
+}
+input[type="range"]::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 16px rgba(0,229,255,0.9);
+}
+
+.btn-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+.btn {
+  font-family: var(--font-d);
+  font-size: 0.6rem; font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  padding: 9px 16px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.04);
+  color: var(--text-bright);
+  cursor: pointer;
+  transition: all 0.18s;
+  white-space: nowrap;
+}
+.btn:hover:not(:disabled) {
+  background: rgba(255,255,255,0.09);
+  border-color: rgba(255,255,255,0.28);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+.btn:active:not(:disabled) { transform: translateY(0); }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.btn-start {
+  background: rgba(123,47,255,0.25);
+  border-color: rgba(123,47,255,0.55);
+  color: #d0b0ff;
+}
+.btn-start:hover:not(:disabled) {
+  background: rgba(123,47,255,0.45);
+  box-shadow: 0 0 20px rgba(123,47,255,0.4), 0 4px 16px rgba(0,0,0,0.4);
+}
+
+.btn-rand {
+  background: rgba(255,183,0,0.15);
+  border-color: rgba(255,183,0,0.4);
+  color: #ffe090;
+}
+.btn-rand:hover:not(:disabled) {
+  background: rgba(255,183,0,0.3);
+  box-shadow: 0 0 16px rgba(255,183,0,0.3), 0 4px 16px rgba(0,0,0,0.4);
+}
+
+.icon-btn {
+  width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.icon-btn:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2); }
+
+#legend {
+  display: flex; gap: 14px; align-items: center; flex-wrap: wrap; flex-shrink: 0;
+}
+.leg { display: flex; align-items: center; gap: 5px; font-size: 0.57rem; letter-spacing: 0.1em; color: rgba(255,255,255,0.4); }
+.leg-dot { width: 8px; height: 8px; border-radius: 2px; }
+.ld-default { background: #2a2585; }
+.ld-range   { background: #3535b8; }
+.ld-pivot   { background: var(--col-pivot); box-shadow: 0 0 6px var(--col-pivot); }
+.ld-cmp     { background: var(--col-compare); box-shadow: 0 0 6px var(--col-compare); }
+.ld-srt     { background: var(--col-sorted); box-shadow: 0 0 6px var(--col-sorted); }
+.ld-swp     { background: var(--col-swap); box-shadow: 0 0 6px var(--col-swap); }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="stats">
+    <div class="stat s-comp">
+      <div class="stat-label">Comparisons</div>
+      <div class="stat-value" id="sv-comp">0</div>
+    </div>
+    <div class="stat s-swap">
+      <div class="stat-label">Swaps</div>
+      <div class="stat-value" id="sv-swap">0</div>
+    </div>
+    <div class="stat s-depth">
+      <div class="stat-label">Rec. Depth</div>
+      <div class="stat-value" id="sv-depth">—</div>
+    </div>
+    <div class="stat s-step">
+      <div class="stat-label">Step</div>
+      <div class="stat-value" id="sv-step">— / —</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Array Size</div>
+      <div class="stat-value" id="sv-size">50</div>
+    </div>
+  </div>
+
+  <div id="viz-wrap">
+    <canvas id="viz-canvas"></canvas>
+    <div class="corner corner-tl"></div>
+    <div class="corner corner-tr"></div>
+    <div class="corner corner-bl"></div>
+    <div class="corner corner-br"></div>
+  </div>
+
+  <div id="status">
+    <div class="status-icon idle" id="status-dot"></div>
+    <span id="status-text">Array ready — press START to begin visualization</span>
+  </div>
+
+  <div id="controls">
+    <div class="ctrl-group" style="max-width:180px">
+      <div class="ctrl-label">Array Size <span id="lbl-size">50</span></div>
+      <input type="range" id="rng-size" min="10" max="200" value="50">
+    </div>
+    <div class="ctrl-group" style="max-width:180px">
+      <div class="ctrl-label">Speed <span id="lbl-speed">5</span></div>
+      <input type="range" id="rng-speed" min="1" max="10" value="5">
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-start" id="btn-start">▶ START</button>
+      <button class="btn" id="btn-pause" disabled>⏸ PAUSE</button>
+      <button class="btn" id="btn-reset">↺ RESET</button>
+      <button class="btn btn-rand" id="btn-rand">⚄ RANDOMIZE</button>
+      <button class="icon-btn" id="btn-sound" title="Toggle Sound">🔊</button>
+    </div>
+    <div id="legend">
+      <div class="leg"><div class="leg-dot ld-default"></div>DEFAULT</div>
+      <div class="leg"><div class="leg-dot ld-range"></div>RANGE</div>
+      <div class="leg"><div class="leg-dot ld-pivot"></div>PIVOT</div>
+      <div class="leg"><div class="leg-dot ld-cmp"></div>COMPARE</div>
+      <div class="leg"><div class="leg-dot ld-srt"></div>SORTED</div>
+      <div class="leg"><div class="leg-dot ld-swp"></div>SWAP</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+'use strict';
+
+function generateSteps(inputArr) {
+  const steps = [];
+  const a = [...inputArr];
+  const sorted = new Set();
+  let comps = 0, swaps = 0;
+
+  function push(type, extra) {
+    steps.push({ type, array: [...a], sorted: new Set(sorted), comps, swaps, ...extra });
+  }
+
+  function partition(lo, hi, depth) {
+    const pv = a[hi];
+    push('PIVOT_SELECT', { lo, hi, depth, pivot: hi, cmp: [], swp: [],
+      desc: `▸ Pivot selected: a[${hi}] = ${pv}   range [${lo} .. ${hi}]` });
+
+    let i = lo - 1;
+    for (let j = lo; j < hi; j++) {
+      comps++;
+      const yes = a[j] <= pv;
+      push('COMPARE', { lo, hi, depth, pivot: hi, i, cmp: [j], swp: [],
+        desc: `  Compare: a[${j}] = ${a[j]}  ≤  pivot ${pv} ?  ${yes ? '✓ YES — move left' : '✗ NO — skip'}` });
+
+      if (yes) {
+        i++;
+        if (i !== j) {
+          swaps++;
+          [a[i], a[j]] = [a[j], a[i]];
+          push('SWAP', { lo, hi, depth, pivot: hi, i, cmp: [], swp: [i, j],
+            desc: `  ↔ Swap: a[${i}] ↔ a[${j}]   →  ${a[i]}, ${a[j]}` });
+        }
+      }
+    }
+
+    const pi = i + 1;
+    if (pi !== hi) {
+      swaps++;
+      [a[pi], a[hi]] = [a[hi], a[pi]];
+    }
+    sorted.add(pi);
+    push('PLACE_PIVOT', { lo, hi, depth, pivotFinal: pi, cmp: [], swp: [],
+      desc: `◈ Pivot ${a[pi]} locked at index ${pi}` });
+    return pi;
+  }
+
+  function qs(lo, hi, depth) {
+    if (lo > hi) return;
+    if (lo === hi) {
+      sorted.add(lo);
+      push('SINGLE', { lo, hi, depth, cmp: [], swp: [],
+        desc: `  Single element a[${lo}] = ${a[lo]} — already sorted` });
+      return;
+    }
+    const pi = partition(lo, hi, depth);
+    qs(lo, pi - 1, depth + 1);
+    qs(pi + 1, hi, depth + 1);
+  }
+
+  qs(0, a.length - 1, 0);
+
+  for (let k = 0; k < a.length; k++) sorted.add(k);
+  push('DONE', { lo: 0, hi: a.length - 1, depth: 0, cmp: [], swp: [],
+    desc: `✦ Sort complete — ${comps} comparisons, ${swaps} swaps` });
+  return steps;
+}
+
+let audioCtx = null, masterGain = null, muted = false, activeSounds = 0;
+
+function initAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = 0.5;
+  masterGain.connect(audioCtx.destination);
+}
+
+function playTone(val, maxVal, type) {
+  if (muted || !audioCtx || activeSounds > 6) return;
+  try {
+    const t = Math.max(0.01, val / maxVal);
+    const freq = 120 + t * 980;
+    const now  = audioCtx.currentTime;
+    const osc  = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain); gain.connect(masterGain);
+
+    if (type === 'swap') {
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(freq * 1.4, now);
+      osc.frequency.exponentialRampToValueAtTime(freq * 0.6, now + 0.09);
+      gain.gain.setValueAtTime(0.18, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      osc.start(now); osc.stop(now + 0.12);
+    } else if (type === 'sorted') {
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, now);
+      osc.frequency.linearRampToValueAtTime(freq * 1.02, now + 0.12);
+      gain.gain.setValueAtTime(0.10, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+      osc.start(now); osc.stop(now + 0.18);
+    } else {
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.07, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+      osc.start(now); osc.stop(now + 0.07);
+    }
+    activeSounds++;
+    osc.onended = () => activeSounds--;
+  } catch(_) {}
+}
+
+function playVictory(arr, maxVal) {
+  if (muted || !audioCtx) return;
+  const n = Math.min(arr.length, 16);
+  const step = Math.floor(arr.length / n);
+  for (let k = 0; k < n; k++) {
+    setTimeout(() => playTone(arr[k * step], maxVal, 'sorted'), k * 35);
+  }
+}
+
+const canvas  = document.getElementById('viz-canvas');
+const ctx2d   = canvas.getContext('2d');
+
+const COL = {
+  default : '#1a1748',
+  range   : '#252280',
+  sorted  : '#00e676',
+  pivot   : '#ffb700',
+  compare : '#00e5ff',
+  swap    : '#ff2055',
+};
+const GLOW = {
+  sorted  : { c: '#00e676', b: 10 },
+  pivot   : { c: '#ffb700', b: 20 },
+  compare : { c: '#00e5ff', b: 16 },
+  swap    : { c: '#ff2055', b: 24 },
+};
+
+const flashState = {};
+
+function computeBarStates(step) {
+  const n = step.array.length;
+  const bs = new Array(n).fill('default');
+
+  if (step.lo !== undefined && step.hi !== undefined) {
+    for (let k = step.lo; k <= step.hi; k++) bs[k] = 'range';
+  }
+  if (step.sorted) for (const k of step.sorted) bs[k] = 'sorted';
+  if (step.pivotFinal !== undefined) bs[step.pivotFinal] = 'sorted';
+  if (step.pivot !== undefined && bs[step.pivot] !== 'sorted') bs[step.pivot] = 'pivot';
+  if (step.cmp)  for (const k of step.cmp)  if (bs[k] !== 'sorted') bs[k] = 'compare';
+  if (step.swp)  for (const k of step.swp)  bs[k] = 'swap';
+
+  return bs;
+}
+
+function render(stepIndex) {
+  const W = canvas.width, H = canvas.height;
+  ctx2d.clearRect(0, 0, W, H);
+
+  ctx2d.fillStyle = 'rgba(3,3,15,0.55)';
+  ctx2d.fillRect(0, 0, W, H);
+
+  const step = steps[stepIndex] ?? { array: initArr, sorted: new Set(), cmp: [], swp: [], type:'IDLE', lo: undefined, hi: undefined, depth: 0 };
+  const arr  = step.array;
+  const n    = arr.length;
+  if (!n) return;
+
+  const maxVal = Math.max(...arr);
+
+  const ML = 6, MR = 6, MT = 10;
+  const MB = n <= 80 ? 22 : 8;
+  const availW = W - ML - MR;
+  const availH = H - MT - MB;
+  const barW = availW / n;
+  const gap  = Math.max(0.5, Math.min(1.5, barW * 0.09));
+  const bw   = Math.max(1, barW - gap);
+
+  const bs = computeBarStates(step);
+
+  if (step.lo !== undefined && step.hi !== undefined && step.type !== 'DONE') {
+    const rx = ML + step.lo * barW;
+    const rw = (step.hi - step.lo + 1) * barW;
+    const depthAlpha = Math.max(0.08, 0.18 - step.depth * 0.02);
+    const depthHue = [240, 200, 170, 130, 60, 30][Math.min(step.depth, 5)];
+    ctx2d.fillStyle = `hsla(${depthHue}, 80%, 55%, ${depthAlpha})`;
+    ctx2d.fillRect(rx, MT, rw, availH);
+  }
+
+  for (let i = 0; i < n; i++) {
+    const s = bs[i];
+    if (s !== 'default' && s !== 'range') continue;
+    const val  = arr[i];
+    const barH = (val / maxVal) * (availH - 2);
+    const x = ML + i * barW + gap * 0.5;
+    const y = MT + (availH - barH);
+
+    const grad = ctx2d.createLinearGradient(0, y, 0, y + barH);
+    if (s === 'range') {
+      grad.addColorStop(0, '#3a37c8'); grad.addColorStop(1, '#14125a');
+    } else {
+      grad.addColorStop(0, '#2828a8'); grad.addColorStop(1, '#0c0b38');
+    }
+    ctx2d.fillStyle = grad;
+    ctx2d.fillRect(x, y, bw, barH);
+  }
+
+  for (let i = 0; i < n; i++) {
+    const s = bs[i];
+    const g = GLOW[s];
+    if (!g) continue;
+
+    const val  = arr[i];
+    const barH = (val / maxVal) * (availH - 2);
+    const x = ML + i * barW + gap * 0.5;
+    const y = MT + (availH - barH);
+
+    ctx2d.save();
+    ctx2d.shadowColor = g.c;
+    ctx2d.shadowBlur  = g.b;
+    ctx2d.fillStyle   = COL[s];
+    ctx2d.fillRect(x, y, bw, barH);
+
+    if (s === 'pivot' || s === 'swap') {
+      ctx2d.shadowBlur = g.b * 2;
+      ctx2d.globalAlpha = 0.25;
+      ctx2d.fillRect(x, y, bw, barH);
+    }
+    ctx2d.restore();
+
+    if (barH > 3) {
+      ctx2d.save();
+      ctx2d.globalAlpha = s === 'swap' ? 0.9 : 0.55;
+      ctx2d.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx2d.fillRect(x, y, bw, Math.min(2, barH * 0.06));
+      ctx2d.restore();
+    }
+  }
+
+  if (n <= 120 && step.type !== 'DONE' && step.type !== 'IDLE') {
+    const drawPtr = (idx, color, label) => {
+      if (idx === undefined || idx < 0 || idx >= n) return;
+      const cx = ML + idx * barW + barW / 2;
+      const py = H - MB + 3;
+      ctx2d.save();
+      ctx2d.fillStyle = color;
+      ctx2d.shadowColor = color;
+      ctx2d.shadowBlur = 6;
+      ctx2d.beginPath();
+      ctx2d.moveTo(cx, py); ctx2d.lineTo(cx - 4, py + 7); ctx2d.lineTo(cx + 4, py + 7);
+      ctx2d.fill();
+      if (MB >= 20) {
+        ctx2d.font = '7px Share Tech Mono';
+        ctx2d.textAlign = 'center'; ctx2d.textBaseline = 'top';
+        ctx2d.fillText(label, cx, py + 8);
+      }
+      ctx2d.restore();
+    };
+    if (step.cmp && step.cmp.length) drawPtr(step.cmp[0], '#00e5ff', 'j');
+    if (step.swp && step.swp.length) {
+      drawPtr(step.swp[0], '#ff2055', 'i'); drawPtr(step.swp[1], '#ff2055', 'j');
+    }
+    if (step.pivot !== undefined) drawPtr(step.pivot, '#ffb700', 'p');
+  }
+
+  if (bw >= 11 && n <= 65) {
+    ctx2d.textAlign = 'center'; ctx2d.textBaseline = 'bottom';
+    for (let i = 0; i < n; i++) {
+      const val  = arr[i];
+      const barH = (val / maxVal) * (availH - 2);
+      const x = ML + i * barW + barW / 2;
+      const s = bs[i];
+      const bright = s !== 'default' && s !== 'range';
+      ctx2d.font = `${Math.min(bw - 1, 9)}px Share Tech Mono`;
+      ctx2d.fillStyle = bright ? 'rgba(255,255,255,0.88)' : 'rgba(255,255,255,0.2)';
+      ctx2d.fillText(val, x, H - MB - 1);
+    }
+  }
+
+  if (step.depth > 0 && step.type !== 'DONE') {
+    const maxDepth = 14;
+    const pct = Math.min(step.depth / maxDepth, 1);
+    const depthColors = ['#7b2fff','#2255ff','#00e5ff','#00e676','#ffb700','#ff2055'];
+    const dc = depthColors[Math.min(step.depth - 1, depthColors.length - 1)];
+    ctx2d.fillStyle = 'rgba(255,255,255,0.04)';
+    ctx2d.fillRect(0, H - 4, W, 4);
+    ctx2d.fillStyle = dc;
+    ctx2d.shadowColor = dc; ctx2d.shadowBlur = 6;
+    ctx2d.fillRect(0, H - 3, W * pct, 3);
+    ctx2d.shadowBlur = 0;
+  }
+}
+
+let initArr   = [];
+let steps     = [];
+let stepIdx   = 0;
+let appState  = 'IDLE';
+let rafHandle = null;
+let lastTime  = 0;
+let accum     = 0;
+
+function getDelay() {
+  const s = parseInt(document.getElementById('rng-speed').value);
+  return Math.pow(0.3, (s - 1) / 9) * 250;
+}
+
+function loop(ts) {
+  if (appState !== 'RUNNING') return;
+  const dt = ts - lastTime; lastTime = ts;
+  accum += dt;
+  const delay = getDelay();
+  let dirty = false;
+
+  while (accum >= delay && appState === 'RUNNING') {
+    accum -= delay;
+    stepIdx++;
+    if (stepIdx >= steps.length) {
+      stepIdx = steps.length - 1;
+      appState = 'DONE';
+      playVictory(steps[stepIdx].array, Math.max(...steps[stepIdx].array));
+      syncUI(); render(stepIdx); return;
+    }
+    dirty = true;
+    updateStats(stepIdx);
+    soundForStep(steps[stepIdx]);
+  }
+
+  if (dirty) render(stepIdx);
+  rafHandle = requestAnimationFrame(loop);
+}
+
+function soundForStep(step) {
+  if (!step || !audioCtx) return;
+  const maxVal = Math.max(...step.array);
+  if (step.type === 'SWAP' && step.swp?.length) {
+    playTone(step.array[step.swp[0]], maxVal, 'swap');
+  } else if (step.type === 'COMPARE' && step.cmp?.length) {
+    playTone(step.array[step.cmp[0]], maxVal, 'compare');
+  } else if (step.type === 'PLACE_PIVOT') {
+    if (step.pivotFinal !== undefined) playTone(step.array[step.pivotFinal], maxVal, 'sorted');
+  } else if (step.type === 'SINGLE') {
+    playTone(step.array[step.lo], maxVal, 'sorted');
+  }
+}
+
+function updateStats(idx) {
+  const s = steps[idx];
+  if (!s) return;
+  document.getElementById('sv-comp').textContent  = s.comps;
+  document.getElementById('sv-swap').textContent  = s.swaps;
+  document.getElementById('sv-depth').textContent = s.depth ?? 0;
+  document.getElementById('sv-step').textContent  = `${idx} / ${steps.length - 1}`;
+  document.getElementById('status-text').textContent = s.desc ?? '';
+  const dot = document.getElementById('status-dot');
+  dot.className = 'status-icon';
+  if (appState === 'RUNNING') dot.classList.add('running');
+  if (appState === 'DONE')    dot.classList.add('done');
+  if (appState === 'PAUSED')  dot.classList.add('paused');
+}
+
+function syncUI() {
+  const bs  = document.getElementById('btn-start');
+  const bp  = document.getElementById('btn-pause');
+  const dot = document.getElementById('status-dot');
+
+  bs.disabled = (appState === 'RUNNING' || appState === 'PAUSED');
+  bp.disabled = (appState === 'IDLE' || appState === 'DONE');
+  bp.textContent = appState === 'PAUSED' ? '▶ RESUME' : '⏸ PAUSE';
+
+  dot.className = 'status-icon';
+  if (appState === 'IDLE')    dot.classList.add('idle');
+  if (appState === 'PAUSED')  dot.classList.add('paused');
+  if (appState === 'DONE')    dot.classList.add('done');
+}
+
+function makeArray(size) {
+  return Array.from({ length: size }, () => Math.floor(Math.random() * size) + 1);
+}
+
+function loadArray(arr) {
+  if (rafHandle) cancelAnimationFrame(rafHandle);
+  initArr  = arr;
+  steps    = [];
+  stepIdx  = 0;
+  appState = 'IDLE';
+  const n  = arr.length;
+
+  document.getElementById('sv-comp').textContent  = '0';
+  document.getElementById('sv-swap').textContent  = '0';
+  document.getElementById('sv-depth').textContent = '—';
+  document.getElementById('sv-step').textContent  = '— / —';
+  document.getElementById('sv-size').textContent  = n;
+  document.getElementById('status-text').textContent = `Array of ${n} elements — press START`;
+  syncUI();
+  render(-1);
+}
+
+function resize() {
+  const wrap = document.getElementById('viz-wrap');
+  canvas.width  = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+  render(stepIdx);
+}
+new ResizeObserver(resize).observe(document.getElementById('viz-wrap'));
+
+document.getElementById('btn-start').addEventListener('click', () => {
+  initAudio();
+  if (appState === 'IDLE' || appState === 'DONE') {
+    steps    = generateSteps(initArr);
+    stepIdx  = 0;
+    accum    = 0;
+    appState = 'RUNNING';
+    syncUI();
+    updateStats(0); render(0);
+    lastTime  = performance.now();
+    rafHandle = requestAnimationFrame(loop);
+  }
+});
+
+document.getElementById('btn-pause').addEventListener('click', () => {
+  initAudio();
+  if (appState === 'RUNNING') {
+    appState = 'PAUSED';
+    if (rafHandle) cancelAnimationFrame(rafHandle);
+    syncUI();
+  } else if (appState === 'PAUSED') {
+    appState = 'RUNNING';
+    accum    = 0;
+    lastTime = performance.now();
+    rafHandle = requestAnimationFrame(loop);
+    syncUI();
+  }
+});
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+  loadArray(initArr);
+});
+
+document.getElementById('btn-rand').addEventListener('click', () => {
+  const sz = parseInt(document.getElementById('rng-size').value);
+  document.getElementById('lbl-size').textContent = sz;
+  loadArray(makeArray(sz));
+});
+
+document.getElementById('rng-size').addEventListener('input', function() {
+  document.getElementById('lbl-size').textContent = this.value;
+  if (appState === 'IDLE' || appState === 'DONE') {
+    loadArray(makeArray(parseInt(this.value)));
+  }
+});
+
+document.getElementById('rng-speed').addEventListener('input', function() {
+  document.getElementById('lbl-speed').textContent = this.value;
+});
+
+document.getElementById('btn-sound').addEventListener('click', function() {
+  initAudio();
+  muted = !muted;
+  this.textContent = muted ? '🔇' : '🔊';
+});
+
+loadArray(makeArray(50));
+</script>
+</body>
+</html>
